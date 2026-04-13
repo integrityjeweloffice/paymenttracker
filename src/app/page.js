@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
-import jsPDF from 'jspdf'
-import 'jspdf-autotable'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import { supabase } from '@/lib/supabase'
 
 export default function Home() {
@@ -304,39 +304,61 @@ export default function Home() {
   }
 
   // Add Payment Record
-  const addPaymentRecord = async (e) => {
-    e.preventDefault()
-    if (!companySelect) return showToast("Please select a company", "danger")
-    
-    const { error } = await supabase.from('payment_records').insert([{
-      company: companySelect,
-      person,
-      dept,
-      month,
-      amount: getNumeric(amount),
-      on_bill: getNumeric(onBill),
-      due,
-      mode: payMode,
-      bill: payMode === 'Bank' ? billCA : '',
-      remark: recordRemark.trim()
-    }])
-    
-    if (error) showToast("Error adding payment record", "danger")
-    else {
-      setCompanySelect('')
-      setPerson('')
-      setDept('')
-      setMonth('')
-      setAmount('')
-      setOnBill('')
-      setDue('')
-      setPayMode('Cash')
-      setBillCA('No')
-      setRecordRemark('')
-      loadRecords()
-      showToast("Payment record added successfully")
-    }
+// Add Payment Record with Toast-based Validation Only
+const addPaymentRecord = async (e) => {
+  e.preventDefault();
+
+  // Validation 1: Company
+  if (!companySelect.trim()) {
+    return showToast("Please select a company", "danger");
   }
+
+  // Validation 2: Due Date is required
+  if (!due) {
+    return showToast("Due Date is required", "danger");
+  }
+
+
+
+  // Validation 4: Total Amount
+  const numericAmount = getNumeric(amount);
+  if (numericAmount <= 0) {
+    return showToast("Please enter a valid Total Amount greater than zero", "danger");
+  }
+
+  // If all validations pass → Insert record
+  const { error } = await supabase.from('payment_records').insert([{
+    company: companySelect,
+    person,
+    dept,
+    month,
+    amount: numericAmount,
+    on_bill: getNumeric(onBill),
+    due,
+    mode: payMode,
+    bill: payMode === 'Bank' ? billCA : '',
+    remark: recordRemark.trim()
+  }]);
+
+  if (error) {
+    showToast("Error adding payment record", "danger");
+  } else {
+    // Reset form after successful submission
+    setCompanySelect('');
+    setPerson('');
+    setDept('');
+    setMonth('');
+    setAmount('');
+    setOnBill('');
+    setDue('');
+    setPayMode('Cash');
+    setBillCA('No');
+    setRecordRemark('');
+
+    loadRecords();
+    showToast("Payment record added successfully", "success");
+  }
+};
 
   const fillDetails = (val) => {
     setCompanySelect(val)
@@ -509,34 +531,47 @@ export default function Home() {
     showToast("Excel exported successfully")
   }
 
-  const exportToPDF = () => {
-    if (filteredRecords.length === 0) return showToast("No records to export", "danger")
-    const doc = new jsPDF('landscape', 'pt', 'a4')
-    const today = new Date().toLocaleDateString('en-IN')
-    Object.keys(grouped).forEach((month, idx) => {
-      if (idx > 0) doc.addPage()
-      doc.setFontSize(16)
-      doc.text(`Payment Tracker - ${month}`, 400, 40, { align: "center" })
-      const tableData = grouped[month].map((r, i) => [
-        i + 1, r.company, r.person, r.dept, r.due || '-', r.amount, r.on_bill || 0, r.paid || 0, r.pending || 0, r.mode || '-'
-      ])
-      doc.autoTable({
-        startY: 70,
-        head: [["#", "Company", "Person", "Dept", "Due Date", "Payable", "On-Bill", "Paid", "Pending", "Mode"]],
-        body: tableData,
-        theme: 'grid',
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [33, 37, 41] },
-        didParseCell: (data) => {
-          if (data.section === 'body' && data.column.index >= 5 && data.column.index <= 8) {
-            data.cell.text = [Number(data.cell.raw).toLocaleString('en-IN')]
-          }
+const exportToPDF = () => {
+  if (filteredRecords.length === 0) return showToast("No records to export", "danger")
+  const doc = new jsPDF('landscape', 'pt', 'a4')
+  const today = new Date().toLocaleDateString('en-IN')
+  
+  Object.keys(grouped).forEach((month, idx) => {
+    if (idx > 0) doc.addPage()
+    doc.setFontSize(16)
+    doc.text(`Payment Tracker - ${month}`, 400, 40, { align: "center" })
+    
+    const tableData = grouped[month].map((r, i) => [
+      i + 1, 
+      r.company, 
+      r.person, 
+      r.dept, 
+      r.due || '-', 
+      r.amount, 
+      r.on_bill || 0, 
+      r.paid || 0, 
+      r.pending || 0, 
+      r.mode || '-'
+    ])
+    
+    autoTable(doc, {
+      startY: 70,
+      head: [["#", "Company", "Person", "Dept", "Due Date", "Payable", "On-Bill", "Paid", "Pending", "Mode"]],
+      body: tableData,
+      theme: 'grid',
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [33, 37, 41] },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index >= 5 && data.column.index <= 8) {
+          data.cell.text = [Number(data.cell.raw).toLocaleString('en-IN')]
         }
-      })
+      }
     })
-    doc.save(`Payment_Tracker_${today}.pdf`)
-    showToast("PDF exported successfully")
-  }
+  })
+  
+  doc.save(`Payment_Tracker_${today}.pdf`)
+  showToast("PDF exported successfully")
+}
 
   return (
     <>
@@ -934,6 +969,20 @@ export default function Home() {
             padding: 4px 8px;
             font-size: 0.75rem;
           }
+            @media (max-width: 768px) {
+  .modal-xl {
+    max-width: 95% !important;
+    margin: 10px auto;
+  }
+  
+  .table-responsive {
+    font-size: 0.9rem;
+  }
+  
+  .remark-cell {
+    max-width: 180px;
+  }
+}
         `}
       </style>
 
@@ -1128,54 +1177,114 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Add New Payment */}
-        <div className="card p-4 mb-4">
-          <h5 className="mb-3">Add New Payment</h5>
-          <form onSubmit={addPaymentRecord} className="row g-3">
-            <div className="col-md-3">
-              <label>Company</label>
-              <select value={companySelect} onChange={(e) => fillDetails(e.target.value)} className="form-select" required>
-                <option value="">Select Company</option>
-                {companies.filter(c => c.status === 'active').map((c) => (
-                  <option key={c.id} value={c.name}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-2"><label>Person</label><input value={person} readOnly className="form-control" /></div>
-            <div className="col-md-2"><label>Department</label><input value={dept} readOnly className="form-control" /></div>
-            <div className="col-md-2"><label>Month</label>
-              <select value={month} onChange={e => setMonth(e.target.value)} className="form-select">
-                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-2"><label>Total Amount (₹)</label><input value={amount} onChange={e => setAmount(formatAmount(e.target.value))} className="form-control amount-input" /></div>
-            <div className="col-md-2"><label>On-Bill Amount (₹)</label><input value={onBill} onChange={e => setOnBill(formatAmount(e.target.value))} className="form-control amount-input" /></div>
-            <div className="col-md-2"><label>Due Date</label><input type="date" value={due} onChange={e => setDue(e.target.value)} className="form-control" /></div>
-            <div className="col-md-2"><label>Payment Mode</label>
-              <select value={payMode} onChange={e => { setPayMode(e.target.value); if (e.target.value !== 'Bank') setBillCA('No'); }} className="form-select">
-                <option>Cash</option><option>Bank</option>
-              </select>
-            </div>
-            {payMode === 'Bank' && (
-              <div className="col-md-2"><label>Bill to CA</label>
-                <select value={billCA} onChange={e => setBillCA(e.target.value)} className="form-select">
-                  <option value="No">No</option><option value="Yes">Yes</option>
-                </select>
-              </div>
-            )}
-            <div className="col-12 col-lg-4">
-              <label>Remark (for the entire record)</label>
-              <textarea value={recordRemark} onChange={e => setRecordRemark(e.target.value)} className="form-control" rows="1" placeholder="Optional remark for this payment record"></textarea>
-            </div>
-            <div className="col-12 col-lg-2 d-flex align-items-end">
-              <button type="submit" className="btn btn-success w-100">
-                <i className="fas fa-plus"></i> Add Payment
-              </button>
-            </div>
-          </form>
-        </div>
+{/* Add New Payment - With Toast-based Due Date Validation */}
+<div className="card p-4 mb-4">
+  <h5 className="mb-3">Add New Payment</h5>
+  <form onSubmit={addPaymentRecord} className="row g-3">
+    <div className="col-md-3">
+      <label>Company <span className="text-danger">*</span></label>
+      <select 
+        value={companySelect} 
+        onChange={(e) => fillDetails(e.target.value)} 
+        className="form-select" 
+      >
+        <option value="">Select Company</option>
+        {companies.filter(c => c.status === 'active').map((c) => (
+          <option key={c.id} value={c.name}>{c.name}</option>
+        ))}
+      </select>
+    </div>
+
+    <div className="col-md-2">
+      <label>Person</label>
+      <input value={person} readOnly className="form-control" />
+    </div>
+
+    <div className="col-md-2">
+      <label>Department</label>
+      <input value={dept} readOnly className="form-control" />
+    </div>
+
+    <div className="col-md-2">
+      <label>Month</label>
+      <select value={month} onChange={e => setMonth(e.target.value)} className="form-select">
+        {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(m => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+    </div>
+
+    <div className="col-md-2">
+      <label>Total Amount (₹) <span className="text-danger">*</span></label>
+      <input 
+        value={amount} 
+        onChange={e => setAmount(formatAmount(e.target.value))} 
+        className="form-control amount-input" 
+      />
+    </div>
+
+    <div className="col-md-2">
+      <label>On-Bill Amount (₹)</label>
+      <input 
+        value={onBill} 
+        onChange={e => setOnBill(formatAmount(e.target.value))} 
+        className="form-control amount-input" 
+      />
+    </div>
+
+    <div className="col-md-2">
+      <label>Due Date <span className="text-danger">*</span></label>
+      <input 
+        type="date" 
+        value={due} 
+        onChange={e => setDue(e.target.value)} 
+        className="form-control" 
+      />
+    </div>
+
+    <div className="col-md-2">
+      <label>Payment Mode</label>
+      <select 
+        value={payMode} 
+        onChange={e => { 
+          setPayMode(e.target.value); 
+          if (e.target.value !== 'Bank') setBillCA('No'); 
+        }} 
+        className="form-select"
+      >
+        <option>Cash</option>
+        <option>Bank</option>
+      </select>
+    </div>
+
+    {payMode === 'Bank' && (
+      <div className="col-md-2">
+        <label>Bill to CA</label>
+        <select value={billCA} onChange={e => setBillCA(e.target.value)} className="form-select">
+          <option value="No">No</option>
+          <option value="Yes">Yes</option>
+        </select>
+      </div>
+    )}
+
+    <div className="col-12 col-lg-4">
+      <label>Remark (for the entire record)</label>
+      <textarea 
+        value={recordRemark} 
+        onChange={e => setRecordRemark(e.target.value)} 
+        className="form-control" 
+        rows="1" 
+        placeholder="Optional remark for this payment record"
+      ></textarea>
+    </div>
+
+    <div className="col-12 col-lg-2 d-flex align-items-end">
+      <button type="submit" className="btn btn-success w-100">
+        <i className="fas fa-plus"></i> Add Payment
+      </button>
+    </div>
+  </form>
+</div>
 
         {/* Advanced Filters */}
         <div className="card p-4 mb-4 filter-card">
@@ -1235,8 +1344,18 @@ export default function Home() {
               <input type="text" value={currentFilters.search} onChange={e => setCurrentFilters({ ...currentFilters, search: e.target.value })} className="form-control" placeholder="Company/Person/Remark" />
             </div>
             <div className="col-6 col-md-2"><label>Min Amount ₹</label>
-              <input type="number" value={currentFilters.minAmt} onChange={e => setCurrentFilters({ ...currentFilters, minAmt: parseFloat(e.target.value) || 0 })} className="form-control" />
-            </div>
+<input
+  type="number"
+  value={currentFilters.minAmt ?? ""}
+  onChange={(e) => {
+    const value = e.target.value;
+    setCurrentFilters({
+      ...currentFilters,
+      minAmt: value === "" ? "" : parseFloat(value)
+    });
+  }}
+  className="form-control"
+/>            </div>
             <div className="col-6 col-md-2"><label>Max Amount ₹</label>
               <input type="number" value={currentFilters.maxAmt === Infinity ? '' : currentFilters.maxAmt} onChange={e => setCurrentFilters({ ...currentFilters, maxAmt: parseFloat(e.target.value) || Infinity })} className="form-control" />
             </div>
@@ -1359,84 +1478,205 @@ export default function Home() {
         )}
 
         {/* Edit Modal */}
-        {showEditModal && (
-          <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-            <div className="modal-dialog modal-xl">
-              <div className="modal-content">
-                <div className="modal-header border-0">
-                  <h5 className="modal-title">Edit Payment Record</h5>
-                  <button type="button" className="btn-close" onClick={() => setShowEditModal(false)}></button>
-                </div>
-                <div className="modal-body p-4">
-                  <div className="row g-3 mb-4">
-                    <div className="col-md-3"><label>Total Amount (₹)</label><input value={eAmount} onChange={e => setEAmount(formatAmount(e.target.value))} className="form-control amount-input" /></div>
-                    <div className="col-md-3"><label>On-Bill Amount (₹)</label><input value={eOnBill} onChange={e => setEOnBill(formatAmount(e.target.value))} className="form-control amount-input" /></div>
-                    <div className="col-md-3"><label>Due Date</label><input type="date" value={eDue} onChange={e => setEDue(e.target.value)} className="form-control" /></div>
-                    <div className="col-md-3"><label>Payment Mode</label>
-                      <select value={eMode} onChange={e => setEMode(e.target.value)} className="form-select">
-                        <option>Cash</option><option>Bank</option>
-                      </select>
-                    </div>
-                  </div>
-                  {eMode === 'Bank' && (
-                    <div className="mb-4">
-                      <label>Bill to CA</label>
-                      <select value={eBill} onChange={e => setEBill(e.target.value)} className="form-select w-50">
-                        <option value="No">No</option><option value="Yes">Yes</option>
-                      </select>
-                    </div>
-                  )}
-                  <div className="mb-4">
-                    <label>Record Remark <small className="text-muted">(full view - adjustable height)</small></label>
-                    <textarea value={eRecordRemark} onChange={e => setERecordRemark(e.target.value)} className="form-control" rows="3"></textarea>
-                  </div>
+  {/* Edit Modal - Improved Responsive Version */}
+{showEditModal && (
+  <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+    <div className="modal-dialog modal-xl">
+      <div className="modal-content">
+        <div className="modal-header border-0">
+          <h5 className="modal-title">Edit Payment Record</h5>
+          <button 
+            type="button" 
+            className="btn-close" 
+            onClick={() => setShowEditModal(false)}
+          ></button>
+        </div>
+        
+        <div className="modal-body p-4">
+          {/* Main Record Details - Responsive Grid */}
+          <div className="row g-3 mb-4">
+            <div className="col-12 col-md-3">
+              <label>Total Amount (₹)</label>
+              <input 
+                value={eAmount} 
+                onChange={e => setEAmount(formatAmount(e.target.value))} 
+                className="form-control amount-input" 
+              />
+            </div>
+            <div className="col-12 col-md-3">
+              <label>On-Bill Amount (₹)</label>
+              <input 
+                value={eOnBill} 
+                onChange={e => setEOnBill(formatAmount(e.target.value))} 
+                className="form-control amount-input" 
+              />
+            </div>
+            <div className="col-12 col-md-3">
+              <label>Due Date</label>
+              <input 
+                type="date" 
+                value={eDue} 
+                onChange={e => setEDue(e.target.value)} 
+                className="form-control" 
+              />
+            </div>
+            <div className="col-12 col-md-3">
+              <label>Payment Mode</label>
+              <select 
+                value={eMode} 
+                onChange={e => setEMode(e.target.value)} 
+                className="form-select"
+              >
+                <option>Cash</option>
+                <option>Bank</option>
+              </select>
+            </div>
+          </div>
 
-                  <h5 className="mb-3">Payment Entries</h5>
-                  <table className="table table-bordered" id="payTable">
-                    <thead className="table-light"><tr><th>#</th><th>Amount (₹)</th><th>Date</th><th>Mode</th><th>Remark</th><th className="text-center">Actions</th></tr></thead>
-                    <tbody>
-                      {editPayments.map((p, i) => (
-                        <tr key={i} className="payment-entry-row">
-                          <td>{i + 1}</td>
-                          <td>₹{p.amount.toLocaleString('en-IN')}</td>
-                          <td>{p.date || ''}</td>
-                          <td>{p.mode || ''}</td>
-                          <td className="remark-cell">{p.remark || '—'}</td>
-                          <td className="text-center">
-                            <button className="btn btn-danger btn-sm" onClick={() => deletePaymentRow(i)}><i className="fas fa-trash"></i></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          {eMode === 'Bank' && (
+            <div className="mb-4">
+              <label>Bill to CA</label>
+              <select 
+                value={eBill} 
+                onChange={e => setEBill(e.target.value)} 
+                className="form-select w-100 w-md-50"
+              >
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+            </div>
+          )}
 
-                  <div className="card mt-4">
-                    <div className="card-body">
-                      <h6 className="mb-3">Add New Payment Entry</h6>
-                      <div className="row g-3">
-                        <div className="col-md-3"><label>Amount (₹)</label><input value={newPayAmount} onChange={e => setNewPayAmount(formatAmount(e.target.value))} className="form-control amount-input" /></div>
-                        <div className="col-md-3"><label>Date</label><input type="date" value={newPayDate} onChange={e => setNewPayDate(e.target.value)} className="form-control" /></div>
-                        <div className="col-md-3"><label>Mode</label>
-                          <select value={newPayMode} onChange={e => setNewPayMode(e.target.value)} className="form-select">
-                            <option>Cash</option><option>Bank</option>
-                          </select>
-                        </div>
-                        <div className="col-md-3"><label>Remark</label><textarea value={newPayRemark} onChange={e => setNewPayRemark(e.target.value)} className="form-control" rows="1" placeholder="Optional remark"></textarea></div>
-                        <div className="col-12 text-end">
-                          <button className="btn btn-success" onClick={addPaymentRow}><i className="fas fa-plus"></i> Add Entry</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+          <div className="mb-4">
+            <label>Record Remark <small className="text-muted">(full view)</small></label>
+            <textarea 
+              value={eRecordRemark} 
+              onChange={e => setERecordRemark(e.target.value)} 
+              className="form-control" 
+              rows="3"
+            ></textarea>
+          </div>
+
+          {/* Payment Entries Section - Made Responsive */}
+          <h5 className="mb-3">Payment Entries</h5>
+          
+          <div className="table-responsive mb-4" style={{ maxHeight: '320px', overflowY: 'auto' }}>
+            <table className="table table-bordered table-hover">
+              <thead className="table-light sticky-top">
+                <tr>
+                  <th style={{ width: '50px' }}>#</th>
+                  <th style={{ minWidth: '120px' }}>Amount (₹)</th>
+                  <th style={{ minWidth: '110px' }}>Date</th>
+                  <th style={{ minWidth: '100px' }}>Mode</th>
+                  <th style={{ minWidth: '200px' }}>Remark</th>
+                  <th style={{ width: '80px' }} className="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editPayments.map((p, i) => (
+                  <tr key={i} className="payment-entry-row">
+                    <td>{i + 1}</td>
+                    <td>₹{p.amount.toLocaleString('en-IN')}</td>
+                    <td>{p.date || '—'}</td>
+                    <td>{p.mode || '—'}</td>
+                    <td className="remark-cell" title={p.remark || ''}>
+                      {p.remark || '—'}
+                    </td>
+                    <td className="text-center">
+                      <button 
+                        className="btn btn-danger btn-sm" 
+                        onClick={() => deletePaymentRow(i)}
+                      >
+                        <i className="fas fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {editPayments.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="text-center text-muted py-4">
+                      No payment entries added yet
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Add New Payment Entry Form - Responsive */}
+          <div className="card">
+            <div className="card-body">
+              <h6 className="mb-3">Add New Payment Entry</h6>
+              <div className="row g-3">
+                <div className="col-12 col-md-3">
+                  <label>Amount (₹)</label>
+                  <input 
+                    value={newPayAmount} 
+                    onChange={e => setNewPayAmount(formatAmount(e.target.value))} 
+                    className="form-control amount-input" 
+                  />
                 </div>
-                <div className="modal-footer border-0">
-                  <button className="btn btn-primary px-4" onClick={saveEdit}><i className="fas fa-save"></i> Save All Changes</button>
-                  <button className="btn btn-secondary px-4" onClick={() => setShowEditModal(false)}>Cancel</button>
+                <div className="col-12 col-md-3">
+                  <label>Date</label>
+                  <input 
+                    type="date" 
+                    value={newPayDate} 
+                    onChange={e => setNewPayDate(e.target.value)} 
+                    className="form-control" 
+                  />
+                </div>
+                <div className="col-12 col-md-3">
+                  <label>Mode</label>
+                  <select 
+                    value={newPayMode} 
+                    onChange={e => setNewPayMode(e.target.value)} 
+                    className="form-select"
+                  >
+                    <option>Cash</option>
+                    <option>Bank</option>
+                  </select>
+                </div>
+                <div className="col-12 col-md-3">
+                  <label>Remark</label>
+                  <textarea 
+                    value={newPayRemark} 
+                    onChange={e => setNewPayRemark(e.target.value)} 
+                    className="form-control" 
+                    rows="1" 
+                    placeholder="Optional remark"
+                  ></textarea>
+                </div>
+                <div className="col-12 text-end">
+                  <button 
+                    className="btn btn-success" 
+                    onClick={addPaymentRow}
+                  >
+                    <i className="fas fa-plus"></i> Add Entry
+                  </button>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        </div>
+
+        <div className="modal-footer border-0">
+          <button 
+            className="btn btn-primary px-4" 
+            onClick={saveEdit}
+          >
+            <i className="fas fa-save"></i> Save All Changes
+          </button>
+          <button 
+            className="btn btn-secondary px-4" 
+            onClick={() => setShowEditModal(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* Company Edit Modal */}
         {showCompanyModal && (
