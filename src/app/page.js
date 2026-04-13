@@ -20,6 +20,8 @@ export default function Home() {
   const [mPerson, setMPerson] = useState('')
   const [mDept, setMDept] = useState('')
   const [mStatus, setMStatus] = useState('active')
+  const [mContacts, setMContacts] = useState([''])
+  const [mAddress, setMAddress] = useState('')
 
   // Add New Payment Form
   const [companySelect, setCompanySelect] = useState('')
@@ -65,6 +67,8 @@ export default function Home() {
   const [cPerson, setCPerson] = useState('')
   const [cDept, setCDept] = useState('')
   const [cStatus, setCStatus] = useState('active')
+  const [cContacts, setCContacts] = useState([''])
+  const [cAddress, setCAddress] = useState('')
 
   // Custom Confirm Modal
   const [showConfirm, setShowConfirm] = useState(false)
@@ -96,6 +100,40 @@ export default function Home() {
   }
 
   const getNumeric = (val) => parseFloat(String(val).replace(/,/g, '')) || 0
+
+  // Contact number handlers
+  const addContactField = () => {
+    setMContacts([...mContacts, ''])
+  }
+
+  const removeContactField = (index) => {
+    if (mContacts.length > 1) {
+      setMContacts(mContacts.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateContactField = (index, value) => {
+    const updated = [...mContacts]
+    updated[index] = value
+    setMContacts(updated)
+  }
+
+  // Edit modal contact handlers
+  const addEditContactField = () => {
+    setCContacts([...cContacts, ''])
+  }
+
+  const removeEditContactField = (index) => {
+    if (cContacts.length > 1) {
+      setCContacts(cContacts.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateEditContactField = (index, value) => {
+    const updated = [...cContacts]
+    updated[index] = value
+    setCContacts(updated)
+  }
 
   // Load Data from Database
   const loadDepartments = async () => {
@@ -180,11 +218,15 @@ export default function Home() {
   const addCompany = async () => {
     if (!mCompany.trim()) return showToast("Company name is required", "danger")
     
+    const filteredContacts = mContacts.filter(c => c.trim() !== '')
+    
     const { error } = await supabase.from('companies').insert([{
       name: mCompany.trim(),
       person: mPerson,
       dept: mDept,
-      status: mStatus
+      status: mStatus,
+      contacts: JSON.stringify(filteredContacts),
+      address: mAddress.trim()
     }])
     
     if (error) showToast("Error adding company", "danger")
@@ -192,6 +234,8 @@ export default function Home() {
       setMCompany('')
       setMPerson('')
       setMDept('')
+      setMContacts([''])
+      setMAddress('')
       loadCompanies()
       showToast("Company added successfully")
     }
@@ -205,13 +249,36 @@ export default function Home() {
     setCPerson(c.person || '')
     setCDept(c.dept || '')
     setCStatus(c.status)
+    
+    // Parse contacts from JSON
+    let parsedContacts = ['']
+    try {
+      if (c.contacts) {
+        parsedContacts = JSON.parse(c.contacts)
+        if (parsedContacts.length === 0) parsedContacts = ['']
+      }
+    } catch (e) {
+      parsedContacts = ['']
+    }
+    setCContacts(parsedContacts)
+    setCAddress(c.address || '')
+    
     setShowCompanyModal(true)
   }
 
   const saveCompanyEdit = async () => {
+    const filteredContacts = cContacts.filter(c => c.trim() !== '')
+    
     const { error } = await supabase
       .from('companies')
-      .update({ name: cName, person: cPerson, dept: cDept, status: cStatus })
+      .update({ 
+        name: cName, 
+        person: cPerson, 
+        dept: cDept, 
+        status: cStatus,
+        contacts: JSON.stringify(filteredContacts),
+        address: cAddress.trim()
+      })
       .eq('id', compId)
     
     if (error) showToast("Error updating company", "danger")
@@ -647,12 +714,66 @@ export default function Home() {
 
           textarea.form-control { resize: none; overflow: hidden; min-height: 44px; }
 
-          .table-responsive {
+          /* Master Tables with Visible Scrollbar */
+          .master-table-wrapper {
             border-radius: 16px;
             border: 1px solid #e2e8f0;
             background: white;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             overflow: hidden;
+          }
+
+          .master-table-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: auto;
+          }
+
+          .master-table-scroll::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+          }
+
+          .master-table-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+          }
+
+          .master-table-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+          }
+
+          .master-table-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+          }
+
+          /* Payment Records Table - Horizontal Scroll Only */
+          .table-responsive {
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            overflow-x: auto;
+            overflow-y: visible;
+          }
+
+          .table-responsive::-webkit-scrollbar {
+            height: 10px;
+          }
+
+          .table-responsive::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+          }
+
+          .table-responsive::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+          }
+
+          .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
           }
 
           .table thead th {
@@ -663,6 +784,9 @@ export default function Home() {
             font-size: 0.8rem;
             letter-spacing: 0.05em;
             padding: 16px 12px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
           }
 
           .table td {
@@ -684,12 +808,6 @@ export default function Home() {
             letter-spacing: 0.05em;
             padding: 16px;
             border-bottom: 2px solid #e2e8f0;
-          }
-
-          .table td {
-            padding: 16px;
-            border-bottom: 1px solid #e2e8ee;
-            font-weight: 500;
           }
 
           .table tfoot td {
@@ -745,10 +863,26 @@ export default function Home() {
             border: 1px solid #e2e8f0;
           }
 
-          ::-webkit-scrollbar { width: 8px; height: 8px; }
-          ::-webkit-scrollbar-track { background: transparent; }
-          ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-          ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+          .address-cell {
+            max-width: 200px;
+            word-wrap: break-word;
+            white-space: normal;
+            line-height: 1.4;
+          }
+
+          .contacts-cell {
+            min-width: 140px;
+          }
+
+          .contact-item {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+          }
+
+          .contact-item:last-child {
+            margin-bottom: 0;
+          }
 
           .toast {
             z-index: 2000;
@@ -776,17 +910,6 @@ export default function Home() {
             box-shadow: 0 1px 3px rgba(0,0,0,0.08);
           }
 
-          .table-responsive {
-            width: 100%;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-          }
-
-          .table-responsive::-webkit-scrollbar {
-            display: none;
-          }
-
           .table {
             min-width: 1200px;
           }
@@ -797,6 +920,19 @@ export default function Home() {
 
           @media (max-width: 768px) {
             .card { margin-bottom: 24px; }
+          }
+
+          .contact-field-group {
+            position: relative;
+          }
+
+          .remove-contact-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 4px 8px;
+            font-size: 0.75rem;
           }
         `}
       </style>
@@ -825,25 +961,27 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <div className="table-responsive mt-4">
-            <table className="table table-bordered">
-              <thead className="table-dark">
-                <tr><th>#</th><th>Department Name</th><th className="text-center" style={{ width: '120px' }}>Action</th></tr>
-              </thead>
-              <tbody>
-                {departments.map((d, i) => (
-                  <tr key={d.id}>
-                    <td>{i + 1}</td>
-                    <td>{d.name}</td>
-                    <td className="text-center">
-                      <button className="btn btn-danger btn-sm" onClick={() => deleteDept(i)}>
-                        <i className="fas fa-trash"></i> Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="master-table-wrapper mt-4">
+            <div className="master-table-scroll">
+              <table className="table table-bordered mb-0">
+                <thead className="table-dark">
+                  <tr><th>#</th><th>Department Name</th><th className="text-center" style={{ width: '120px' }}>Action</th></tr>
+                </thead>
+                <tbody>
+                  {departments.map((d, i) => (
+                    <tr key={d.id}>
+                      <td>{i + 1}</td>
+                      <td>{d.name}</td>
+                      <td className="text-center">
+                        <button className="btn btn-danger btn-sm" onClick={() => deleteDept(i)}>
+                          <i className="fas fa-trash"></i> Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -851,47 +989,142 @@ export default function Home() {
         <div className="card p-4 mb-4">
           <h5 className="mb-3">Company Master</h5>
           <div className="row g-3 align-items-end">
-            <div className="col-md-3"><label>Company Name</label><input value={mCompany} onChange={e => setMCompany(e.target.value)} className="form-control" /></div>
-            <div className="col-md-3"><label>Contact Person</label><input value={mPerson} onChange={e => setMPerson(e.target.value)} className="form-control" /></div>
-            <div className="col-md-2"><label>Department</label>
+            <div className="col-md-3">
+              <label>Company Name</label>
+              <input value={mCompany} onChange={e => setMCompany(e.target.value)} className="form-control" />
+            </div>
+            <div className="col-md-2">
+              <label>Contact Person</label>
+              <input value={mPerson} onChange={e => setMPerson(e.target.value)} className="form-control" />
+            </div>
+            <div className="col-md-2">
+              <label>Department</label>
               <select value={mDept} onChange={e => setMDept(e.target.value)} className="form-select">
                 <option value="">Select Department</option>
                 {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
               </select>
             </div>
-            <div className="col-md-2"><label>Status</label>
+            <div className="col-md-2">
+              <label>Status</label>
               <select value={mStatus} onChange={e => setMStatus(e.target.value)} className="form-select">
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
-            <div className="col-md-2">
+          </div>
+
+          {/* Contact Numbers */}
+          <div className="row g-3 mt-2">
+            <div className="col-12">
+              <label>Contact Numbers</label>
+              {mContacts.map((contact, index) => (
+                <div key={index} className="contact-field-group mb-2">
+                  <div className="d-flex gap-2">
+                    <input
+                      type="tel"
+                      value={contact}
+                      onChange={(e) => updateContactField(index, e.target.value)}
+                      className="form-control"
+                      placeholder={`Contact Number ${index + 1}`}
+                    />
+                    {mContacts.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => removeContactField(index)}
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm mt-2"
+                onClick={addContactField}
+              >
+                <i className="fas fa-plus"></i> Add Contact Number
+              </button>
+            </div>
+          </div>
+
+          {/* Address */}
+          <div className="row g-3 mt-2">
+            <div className="col-md-8">
+              <label>Address</label>
+              <textarea
+                value={mAddress}
+                onChange={(e) => setMAddress(e.target.value)}
+                className="form-control"
+                rows="2"
+                placeholder="Enter company address"
+              ></textarea>
+            </div>
+            <div className="col-md-4 d-flex align-items-end">
               <button className="btn btn-primary w-100" onClick={addCompany}>
                 <i className="fas fa-plus"></i> Add Company
               </button>
             </div>
           </div>
-          <div className="table-responsive mt-4">
-            <table className="table table-bordered">
-              <thead className="table-dark">
-                <tr><th>#</th><th>Company Name</th><th>Contact Person</th><th>Department</th><th>Status</th><th className="text-center" style={{ width: '140px' }}>Action</th></tr>
-              </thead>
-              <tbody>
-                {companies.map((c, i) => (
-                  <tr key={c.id}>
-                    <td>{i + 1}</td>
-                    <td>{c.name}</td>
-                    <td>{c.person || '-'}</td>
-                    <td>{c.dept || '-'}</td>
-                    <td><span className={`badge ${c.status === 'active' ? 'bg-success' : 'bg-secondary'}`}>{c.status}</span></td>
-                    <td className="text-center">
-                      <button className="btn btn-warning btn-sm me-1" onClick={() => openCompanyModal(i)}><i className="fas fa-edit"></i></button>
-                      <button className="btn btn-danger btn-sm" onClick={() => deleteCompany(i)}><i className="fas fa-trash"></i></button>
-                    </td>
+
+          <div className="master-table-wrapper mt-4">
+            <div className="master-table-scroll">
+              <table className="table table-bordered mb-0">
+                <thead className="table-dark">
+                  <tr>
+                    <th>#</th>
+                    <th>Company Name</th>
+                    <th>Contact Person</th>
+                    <th>Department</th>
+                    <th>Contact Numbers</th>
+                    <th>Address</th>
+                    <th>Status</th>
+                    <th className="text-center" style={{ width: '140px' }}>Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {companies.map((c, i) => {
+                    let contacts = []
+                    try {
+                      contacts = c.contacts ? JSON.parse(c.contacts) : []
+                    } catch (e) {
+                      contacts = []
+                    }
+                    
+                    return (
+                      <tr key={c.id}>
+                        <td>{i + 1}</td>
+                        <td>{c.name}</td>
+                        <td>{c.person || '-'}</td>
+                        <td>{c.dept || '-'}</td>
+                        <td className="contacts-cell">
+                          {contacts.length > 0 ? (
+                            contacts.map((num, idx) => (
+                              <span key={idx} className="contact-item">{num}</span>
+                            ))
+                          ) : '-'}
+                        </td>
+                        <td className="address-cell">{c.address || '-'}</td>
+                        <td>
+                          <span className={`badge ${c.status === 'active' ? 'bg-success' : 'bg-secondary'}`}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <button className="btn btn-warning btn-sm me-1" onClick={() => openCompanyModal(i)}>
+                            <i className="fas fa-edit"></i>
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => deleteCompany(i)}>
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1055,54 +1288,52 @@ export default function Home() {
                   <span className="badge bg-light text-dark">{monthRecords.length} record(s)</span>
                 </div>
                 <div className="table-responsive">
-                  <div style={{ minWidth: "1200px" }}>
-                    <table className="table mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>#</th><th>Company</th><th>Person</th><th>Dept</th><th>Due Date</th>
-                          <th>Payable</th><th>On-Bill</th><th>Paid</th><th>Pending</th><th>Mode</th><th>Bill to CA</th><th>Record Remark</th><th className="text-center">Action</th>
+                  <table className="table mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th><th>Company</th><th>Person</th><th>Dept</th><th>Due Date</th>
+                        <th>Payable</th><th>On-Bill</th><th>Paid</th><th>Pending</th><th>Mode</th><th>Bill to CA</th><th>Record Remark</th><th className="text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthRecords.map((r, idx) => (
+                        <tr key={r.id} className="payment-entry-row">
+                          <td>{idx + 1}</td>
+                          <td>{r.company}</td>
+                          <td>{r.person}</td>
+                          <td>{r.dept}</td>
+                          <td>{r.due || '-'}</td>
+                          <td>₹{r.amount.toLocaleString('en-IN')}</td>
+                          <td className="text-primary">₹{(r.on_bill || 0).toLocaleString('en-IN')}</td>
+                          <td className="text-success">₹{(r.paid || 0).toLocaleString('en-IN')}</td>
+                          <td className="text-danger">₹{(r.pending || 0).toLocaleString('en-IN')}</td>
+                          <td>{r.mode || '-'}</td>
+                          <td>{r.bill || '-'}</td>
+                          <td className="remark-cell" title={r.remark || ''}>
+                            {r.remark ? (r.remark.length > 38 ? r.remark.substring(0, 38) + '...' : r.remark) : '—'}
+                          </td>
+                          <td className="text-center">
+                            <button className="btn btn-warning btn-sm me-1" onClick={() => openEdit(records.indexOf(r))}>
+                              <i className="fas fa-edit"></i>
+                            </button>
+                            <button className="btn btn-danger btn-sm" onClick={() => deleteRecord(records.indexOf(r))}>
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {monthRecords.map((r, idx) => (
-                          <tr key={r.id} className="payment-entry-row">
-                            <td>{idx + 1}</td>
-                            <td>{r.company}</td>
-                            <td>{r.person}</td>
-                            <td>{r.dept}</td>
-                            <td>{r.due || '-'}</td>
-                            <td>₹{r.amount.toLocaleString('en-IN')}</td>
-                            <td className="text-primary">₹{(r.on_bill || 0).toLocaleString('en-IN')}</td>
-                            <td className="text-success">₹{(r.paid || 0).toLocaleString('en-IN')}</td>
-                            <td className="text-danger">₹{(r.pending || 0).toLocaleString('en-IN')}</td>
-                            <td>{r.mode || '-'}</td>
-                            <td>{r.bill || '-'}</td>
-                            <td className="remark-cell" title={r.remark || ''}>
-                              {r.remark ? (r.remark.length > 38 ? r.remark.substring(0, 38) + '...' : r.remark) : '—'}
-                            </td>
-                            <td className="text-center">
-                              <button className="btn btn-warning btn-sm me-1" onClick={() => openEdit(records.indexOf(r))}>
-                                <i className="fas fa-edit"></i>
-                              </button>
-                              <button className="btn btn-danger btn-sm" onClick={() => deleteRecord(records.indexOf(r))}>
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan="5" className="text-end">Total for {m}</td>
-                          <td>₹{mPay.toLocaleString('en-IN')}</td>
-                          <td className="text-primary">₹{mOnBill.toLocaleString('en-IN')}</td>
-                          <td className="text-success">₹{mPaid.toLocaleString('en-IN')}</td>
-                          <td className="text-danger">₹{mPend.toLocaleString('en-IN')}</td>
-                          <td colSpan="4"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan="5" className="text-end">Total for {m}</td>
+                        <td>₹{mPay.toLocaleString('en-IN')}</td>
+                        <td className="text-primary">₹{mOnBill.toLocaleString('en-IN')}</td>
+                        <td className="text-success">₹{mPaid.toLocaleString('en-IN')}</td>
+                        <td className="text-danger">₹{mPend.toLocaleString('en-IN')}</td>
+                        <td colSpan="4"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
             )
@@ -1210,18 +1441,68 @@ export default function Home() {
         {/* Company Edit Modal */}
         {showCompanyModal && (
           <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
-            <div className="modal-dialog">
+            <div className="modal-dialog modal-lg">
               <div className="modal-content p-4">
-                <label>Name</label><input value={cName} onChange={e => setCName(e.target.value)} className="form-control mb-3" />
-                <label>Person</label><input value={cPerson} onChange={e => setCPerson(e.target.value)} className="form-control mb-3" />
+                <h5 className="mb-3">Edit Company</h5>
+                
+                <label>Name</label>
+                <input value={cName} onChange={e => setCName(e.target.value)} className="form-control mb-3" />
+                
+                <label>Person</label>
+                <input value={cPerson} onChange={e => setCPerson(e.target.value)} className="form-control mb-3" />
+                
                 <label>Department</label>
                 <select value={cDept} onChange={e => setCDept(e.target.value)} className="form-select mb-3">
+                  <option value="">Select Department</option>
                   {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
                 </select>
+
+                <label>Contact Numbers</label>
+                {cContacts.map((contact, index) => (
+                  <div key={index} className="mb-2">
+                    <div className="d-flex gap-2">
+                      <input
+                        type="tel"
+                        value={contact}
+                        onChange={(e) => updateEditContactField(index, e.target.value)}
+                        className="form-control"
+                        placeholder={`Contact Number ${index + 1}`}
+                      />
+                      {cContacts.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          onClick={() => removeEditContactField(index)}
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm mb-3"
+                  onClick={addEditContactField}
+                >
+                  <i className="fas fa-plus"></i> Add Contact Number
+                </button>
+
+                <label>Address</label>
+                <textarea
+                  value={cAddress}
+                  onChange={(e) => setCAddress(e.target.value)}
+                  className="form-control mb-3"
+                  rows="3"
+                  placeholder="Enter company address"
+                ></textarea>
+                
                 <label>Status</label>
                 <select value={cStatus} onChange={e => setCStatus(e.target.value)} className="form-select mb-3">
-                  <option value="active">Active</option><option value="inactive">Inactive</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
                 </select>
+                
                 <div className="text-end">
                   <button className="btn btn-secondary me-2" onClick={() => setShowCompanyModal(false)}>Cancel</button>
                   <button className="btn btn-primary" onClick={saveCompanyEdit}>Save</button>
