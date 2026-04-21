@@ -4,7 +4,7 @@ import { Outfit } from 'next/font/google'
 const outfit = Outfit({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Payment Tracker Pro++',
+  title: 'Payment Tracker',
   description: 'Advanced payment tracking system',
 }
 
