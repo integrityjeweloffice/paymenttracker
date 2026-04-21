@@ -7,6 +7,12 @@ import autoTable from 'jspdf-autotable'
 import { supabase } from '@/lib/supabase'
 
 export default function Home() {
+  // Authentication States
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+
   // Data States
   const [records, setRecords] = useState([])
   const [companies, setCompanies] = useState([])
@@ -183,10 +189,12 @@ export default function Home() {
   }
 
   useEffect(() => {
-    loadDepartments()
-    loadCompanies()
-    loadRecords()
-  }, [])
+    if (isAuthenticated) {
+      loadDepartments()
+      loadCompanies()
+      loadRecords()
+    }
+  }, [isAuthenticated])
 
   // Department Functions
   const addDepartment = async () => {
@@ -226,15 +234,17 @@ export default function Home() {
     
     const { error } = await supabase.from('companies').insert([{
       name: mCompany.trim(),
-      person: mPerson,
-      dept: mDept,
+      person: mPerson || null,
+      dept: mDept || null,
       status: mStatus,
-      contacts: JSON.stringify(filteredContacts),
-      address: mAddress.trim()
+      contacts: filteredContacts.length > 0 ? JSON.stringify(filteredContacts) : null,
+      address: mAddress.trim() || null
     }])
     
-    if (error) showToast("Error adding company", "danger")
-    else {
+    if (error) {
+      console.error("Error adding company:", error)
+      showToast("Error adding company", "danger")
+    } else {
       setMCompany('')
       setMPerson('')
       setMDept('')
@@ -279,16 +289,18 @@ export default function Home() {
       .from('companies')
       .update({ 
         name: cName.trim(), 
-        person: cPerson.trim(), 
-        dept: cDept, 
+        person: cPerson.trim() || null, 
+        dept: cDept || null, 
         status: cStatus,
-        contacts: JSON.stringify(filteredContacts),
-        address: cAddress.trim()
+        contacts: filteredContacts.length > 0 ? JSON.stringify(filteredContacts) : null,
+        address: cAddress.trim() || null
       })
       .eq('id', compId)
     
-    if (error) showToast("Error updating company", "danger")
-    else {
+    if (error) {
+      console.error("Error updating company:", error)
+      showToast("Error updating company", "danger")
+    } else {
       setShowCompanyModal(false)
       loadCompanies()
       loadRecords() // Refresh records if company details changed
@@ -605,6 +617,166 @@ export default function Home() {
     
     doc.save(`Payment_Tracker_${today}.pdf`)
     showToast("PDF exported successfully")
+  }
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    if (!loginUsername.trim() || !loginPassword.trim()) {
+      return showToast("Please enter username and password", "danger")
+    }
+
+    setIsLoggingIn(true)
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('username', loginUsername.trim())
+      .eq('password', loginPassword.trim())
+      .single()
+    
+    if (error || !data) {
+      showToast("Invalid username or password", "danger")
+    } else {
+      setIsAuthenticated(true)
+      showToast("Login successful!", "success")
+    }
+    setIsLoggingIn(false)
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        {/* Global Styles */}
+        <style jsx global>
+          {`
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+            :root {
+              --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+              --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              --danger-gradient: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+              --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+              --info-gradient: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+              --card-bg: rgba(255, 255, 255, 0.75);
+              --bg-color: #f0f4f8;
+            }
+
+            * {
+              box-sizing: border-box;
+            }
+
+            body, .container-fluid {
+              background: var(--bg-color);
+              background-image:
+                radial-gradient(at 40% 20%, hsla(253,16%,7%,0.05) 0px, transparent 50%),
+                radial-gradient(at 80% 0%, hsla(225,39%,30%,0.05) 0px, transparent 50%),
+                radial-gradient(at 0% 50%, hsla(339,49%,30%,0.05) 0px, transparent 50%);
+              background-attachment: fixed;
+              font-family: 'Outfit', sans-serif;
+              color: #1e293b;
+              min-height: 100vh;
+            }
+
+            .card {
+              border-radius: 24px;
+              box-shadow: 0 10px 30px rgba(0,0,0,0.03), 0 1px 3px rgba(0,0,0,0.05);
+              border: 1px solid rgba(255,255,255,0.8);
+              background: var(--card-bg);
+              backdrop-filter: blur(20px);
+            }
+
+            .form-control {
+              border-radius: 14px;
+              border: 1px solid #e2e8f0;
+              padding: 12px 16px;
+              background-color: rgba(255, 255, 255, 0.95);
+            }
+
+            .form-control:focus {
+              border-color: #818cf8;
+              box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+              outline: none;
+            }
+
+            .btn-primary {
+              background: var(--primary-gradient);
+              color: white;
+              border-radius: 14px;
+              padding: 12px 24px;
+              font-weight: 600;
+              border: none;
+              transition: all 0.3s ease;
+            }
+
+            .btn-primary:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4);
+            }
+          `}
+        </style>
+        
+        {/* Toast */}
+        {toast.show && (
+          <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 1055 }}>
+            <div className={`toast show align-items-center text-white bg-${toast.type} border-0 rounded-4`} role="alert" aria-live="assertive" aria-atomic="true">
+              <div className="d-flex">
+                <div className="toast-body fw-bold px-4 py-3">
+                  <i className={`fas fa-${toast.type === 'success' ? 'check-circle' : toast.type === 'danger' ? 'exclamation-circle' : 'info-circle'} me-2`}></i>
+                  {toast.msg}
+                </div>
+                <button type="button" className="btn-close btn-close-white me-3 m-auto" onClick={() => setToast({ ...toast, show: false })}></button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="container-fluid d-flex align-items-center justify-content-center" style={{ minHeight: '100vh' }}>
+          <div className="card p-5" style={{ maxWidth: '400px', width: '100%' }}>
+            <div className="text-center mb-4">
+              <div className="d-inline-block p-3 rounded-circle mb-3" style={{ background: 'var(--primary-gradient)' }}>
+                <i className="fas fa-lock text-white fa-2x"></i>
+              </div>
+              <h3 className="text-primary">Admin Login</h3>
+              <p className="text-muted">Enter credentials to access tracker</p>
+            </div>
+            
+            <form onSubmit={handleLogin}>
+              <div className="mb-3">
+                <label className="form-label" style={{ fontWeight: 600, color: '#64748b' }}>Username</label>
+                <input 
+                  type="text" 
+                  className="form-control" 
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="Enter username"
+                  autoFocus
+                />
+              </div>
+              <div className="mb-4">
+                <label className="form-label" style={{ fontWeight: 600, color: '#64748b' }}>Password</label>
+                <input 
+                  type="password" 
+                  className="form-control" 
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter password"
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="btn btn-primary w-100"
+                disabled={isLoggingIn}
+              >
+                {isLoggingIn ? (
+                  <><i className="fas fa-spinner fa-spin me-2"></i> Logging in...</>
+                ) : (
+                  <><i className="fas fa-sign-in-alt me-2"></i> Login to Dashboard</>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      </>
+    )
   }
 
   return (
