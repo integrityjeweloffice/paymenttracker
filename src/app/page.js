@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '@/lib/supabase'
+import OfficeExpense from './OfficeExpense'
 
 export default function Home() {
   // Authentication States
@@ -12,6 +13,7 @@ export default function Home() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [activeModule, setActiveModule] = useState('selection')
 
   // Data States
   const [records, setRecords] = useState([])
@@ -31,13 +33,19 @@ export default function Home() {
   const [mAddress, setMAddress] = useState('')
 
   // Add New Payment Form
+  const getTodayDate = () => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
+  };
+
   const [companySelect, setCompanySelect] = useState('')
   const [person, setPerson] = useState('')
   const [dept, setDept] = useState('')
   const [month, setMonth] = useState('')
   const [amount, setAmount] = useState('')
   const [onBill, setOnBill] = useState('')
-  const [due, setDue] = useState('')
+  const [due, setDue] = useState(getTodayDate)
   const [payMode, setPayMode] = useState('Cash')
   const [billCA, setBillCA] = useState('No')
   const [recordRemark, setRecordRemark] = useState('')
@@ -62,7 +70,7 @@ export default function Home() {
 
   // New Payment Entry in Edit Modal
   const [newPayAmount, setNewPayAmount] = useState('')
-  const [newPayDate, setNewPayDate] = useState('')
+  const [newPayDate, setNewPayDate] = useState(getTodayDate)
   const [newPayMode, setNewPayMode] = useState('Cash')
   const [newPayRemark, setNewPayRemark] = useState('')
 
@@ -366,7 +374,7 @@ export default function Home() {
       setMonth('')
       setAmount('')
       setOnBill('')
-      setDue('')
+      setDue(getTodayDate())
       setPayMode('Cash')
       setBillCA('No')
       setRecordRemark('')
@@ -400,7 +408,7 @@ export default function Home() {
     
     // Reset new payment entry fields
     setNewPayAmount('')
-    setNewPayDate('')
+    setNewPayDate(getTodayDate())
     setNewPayMode('Cash')
     setNewPayRemark('')
     
@@ -486,7 +494,7 @@ export default function Home() {
     ])
 
     setNewPayAmount('')
-    setNewPayDate('')
+    setNewPayDate(getTodayDate())
     setNewPayMode('Cash')
     setNewPayRemark('')
     showToast("Payment entry added", "success")
@@ -544,6 +552,24 @@ export default function Home() {
 
   const grouped = {}
   filteredRecords.forEach(r => (grouped[r.month] ||= []).push(r))
+
+  // Derive all individual payment transactions across all records
+  const allTransactions = records.flatMap(r => 
+    (r.payments || []).map(p => ({
+      id: p.id || Math.random().toString(), // fallback for id if not present
+      company: r.company,
+      person: r.person || '—',
+      amount: p.amount || 0,
+      remark: p.remark || '—',
+      date: p.date || '—',
+      mode: p.mode || '—',
+      month: r.month || '—'
+    }))
+  ).sort((a, b) => {
+    const dateA = a.date !== '—' ? new Date(a.date) : new Date(0)
+    const dateB = b.date !== '—' ? new Date(b.date) : new Date(0)
+    return dateB - dateA
+  })
 
   // Filter Handlers
   const applyFilters = () => showToast("Filters applied successfully", "success")
@@ -777,6 +803,173 @@ export default function Home() {
         </div>
       </>
     )
+  }
+
+  if (activeModule === 'selection') {
+    return (
+      <>
+        <style jsx global>{`
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+          
+          body { 
+            background: #f8fafc; 
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+          }
+
+          .selection-container {
+            min-height: 100vh;
+            background: 
+              radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+              radial-gradient(circle at 100% 100%, rgba(147, 51, 234, 0.05) 0%, transparent 50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+          }
+
+          .module-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 32px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 320px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+          }
+
+          .module-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: transparent;
+            transition: background 0.3s ease;
+          }
+
+          .module-card.labour::before { background: linear-gradient(90deg, #6366f1, #4f46e5); }
+          .module-card.office::before { background: linear-gradient(90deg, #9333ea, #7e22ce); }
+
+          .module-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.95);
+          }
+
+          .icon-box {
+            width: 80px;
+            height: 80px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            font-size: 32px;
+            transition: all 0.3s ease;
+          }
+
+          .labour .icon-box { background: rgba(99, 102, 241, 0.1); color: #4f46e5; }
+          .office .icon-box { background: rgba(147, 51, 234, 0.1); color: #9333ea; }
+
+          .module-card:hover .icon-box {
+            transform: scale(1.1) rotate(5deg);
+          }
+
+          .module-title {
+            font-weight: 800;
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            color: #1e293b;
+          }
+
+          .module-desc {
+            color: #64748b;
+            font-size: 0.95rem;
+            line-height: 1.5;
+          }
+
+          .selection-header {
+            margin-bottom: 60px;
+            text-align: center;
+          }
+
+          .selection-header h1 {
+            font-weight: 800;
+            font-size: 3rem;
+            letter-spacing: -2px;
+            background: linear-gradient(to right, #1e293b, #475569);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+          }
+
+          .selection-header p {
+            color: #64748b;
+            font-size: 1.1rem;
+          }
+
+          @media (max-width: 768px) {
+            .d-flex.gap-4 {
+              flex-direction: column;
+            }
+            .module-card {
+              width: 100%;
+              max-width: 320px;
+            }
+          }
+        `}</style>
+        
+        <div className="selection-container">
+          <div className="container">
+            <div className="selection-header">
+              <h1>Welcome Back</h1>
+              <p>Choose a management module to continue</p>
+            </div>
+            
+            <div className="d-flex gap-4 justify-content-center">
+              <div className="module-card labour" onClick={() => setActiveModule('labour')}>
+                <div className="icon-box">
+                  <i className="fas fa-user-hard-hat"></i>
+                </div>
+                <div className="module-title">Labour Payment</div>
+                <p className="module-desc">Track company-wise payments, outstanding dues, and generate reports.</p>
+                <div className="mt-4">
+                  <span className="btn btn-primary btn-sm px-4 rounded-pill">Open Module <i className="fas fa-chevron-right ms-2" style={{ fontSize: '10px' }}></i></span>
+                </div>
+              </div>
+
+              <div className="module-card office" onClick={() => setActiveModule('office')}>
+                <div className="icon-box">
+                  <i className="fas fa-building"></i>
+                </div>
+                <div className="module-title">Office Expense</div>
+                <p className="module-desc">Monitor internal funds, categorised expenses, and wallet balances.</p>
+                <div className="mt-4">
+                  <span className="btn btn-sm px-4 rounded-pill" style={{ background: 'linear-gradient(90deg, #9333ea, #7e22ce)', color: 'white' }}>Open Module <i className="fas fa-chevron-right ms-2" style={{ fontSize: '10px' }}></i></span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-center mt-5">
+              <button className="btn btn-link text-muted text-decoration-none" onClick={() => setIsAuthenticated(false)}>
+                <i className="fas fa-sign-out-alt me-2"></i> Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (activeModule === 'office') {
+    return <OfficeExpense moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} />
   }
 
   return (
@@ -1404,10 +1597,15 @@ export default function Home() {
       </style>
 
       <div className="container-fluid py-4">
-        <h3 className="text-center mb-4 fw-bold text-primary">
-          <i className="fas fa-file-invoice-dollar me-2"></i>
-          Office Payments 
-        </h3>
+        <div className="d-flex align-items-center mb-4 gap-3">
+          <button className="btn btn-light rounded-circle shadow-sm p-2" style={{ width: '40px', height: '40px' }} onClick={() => setActiveModule('selection')} title="Back to Selection">
+            <i className="fas fa-arrow-left"></i>
+          </button>
+          <h3 className="m-0 fw-bold text-primary">
+            <i className="fas fa-file-invoice-dollar me-2"></i>
+            Office Payments 
+          </h3>
+        </div>
 
         {/* Loading Overlay */}
         {loading && (
@@ -2020,6 +2218,62 @@ export default function Home() {
             )
           })
         )}
+
+        {/* All Transactions Section */}
+        <div className="card p-4 mb-4">
+          <h5 className="mb-3">
+            <i className="fas fa-list-alt me-2"></i>
+            All Payment Transactions
+          </h5>
+          <p className="text-muted small mb-3">
+            <i className="fas fa-info-circle me-1"></i>
+            This list is dynamically generated directly from your saved data, meaning it's always up-to-date perfectly without needing an extra database table.
+          </p>
+          <div className="master-table-wrapper">
+            <div className="master-table-scroll" style={{ maxHeight: '500px' }}>
+              <table className="table table-bordered mb-0 table-hover">
+                <thead className="table-dark sticky-top">
+                  <tr>
+                    <th style={{ width: '60px' }}>#</th>
+                    <th style={{ minWidth: '110px' }}>Date</th>
+                    <th style={{ minWidth: '100px' }}>Month</th>
+                    <th style={{ minWidth: '150px' }}>Company</th>
+                    <th style={{ minWidth: '130px' }}>Person</th>
+                    <th style={{ minWidth: '120px' }}>Amount Paid</th>
+                    <th style={{ minWidth: '100px' }}>Mode</th>
+                    <th style={{ minWidth: '200px' }}>Particular / Remark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center text-muted py-4">
+                        No payment transactions found
+                      </td>
+                    </tr>
+                  ) : (
+                    allTransactions.map((t, i) => (
+                      <tr key={t.id || i}>
+                        <td>{i + 1}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>{t.date}</td>
+                        <td>{t.month}</td>
+                        <td><strong>{t.company}</strong></td>
+                        <td>{t.person}</td>
+                        <td className="text-success fw-bold">₹{t.amount.toLocaleString('en-IN')}</td>
+                        <td>
+                          <span className={`badge ${t.mode === 'Bank' ? 'bg-info' : 'bg-secondary'}`}>
+                            {t.mode}
+                          </span>
+                        </td>
+                        <td className="remark-cell" title={t.remark}>{t.remark}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
 
         {/* Confirm Modal */}
         {showConfirm && (
