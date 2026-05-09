@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { supabase } from '@/lib/supabase'
 import OfficeExpense from './OfficeExpense'
+import DailyPolishReport from './DailyPolishReport'
 
 export default function Home() {
   // Authentication States
@@ -856,6 +857,7 @@ export default function Home() {
 
           .module-card.labour::before { background: linear-gradient(90deg, #6366f1, #4f46e5); }
           .module-card.office::before { background: linear-gradient(90deg, #9333ea, #7e22ce); }
+          .module-card.daily::before { background: linear-gradient(90deg, #06b6d4, #0891b2); }
 
           .module-card:hover {
             transform: translateY(-10px);
@@ -877,6 +879,7 @@ export default function Home() {
 
           .labour .icon-box { background: rgba(99, 102, 241, 0.1); color: #4f46e5; }
           .office .icon-box { background: rgba(147, 51, 234, 0.1); color: #9333ea; }
+          .daily .icon-box { background: rgba(6, 182, 212, 0.1); color: #0891b2; }
 
           .module-card:hover .icon-box {
             transform: scale(1.1) rotate(5deg);
@@ -955,6 +958,17 @@ export default function Home() {
                   <span className="btn btn-sm px-4 rounded-pill" style={{ background: 'linear-gradient(90deg, #9333ea, #7e22ce)', color: 'white' }}>Open Module <i className="fas fa-chevron-right ms-2" style={{ fontSize: '10px' }}></i></span>
                 </div>
               </div>
+
+              <div className="module-card daily" onClick={() => setActiveModule('daily_polish')}>
+                <div className="icon-box">
+                  <i className="fas fa-gem"></i>
+                </div>
+                <div className="module-title">Daily Polish</div>
+                <p className="module-desc">Log production details, kapan-wise carats, and diamond shapes.</p>
+                <div className="mt-4">
+                  <span className="btn btn-sm px-4 rounded-pill" style={{ background: 'linear-gradient(90deg, #06b6d4, #0891b2)', color: 'white' }}>Open Module <i className="fas fa-chevron-right ms-2" style={{ fontSize: '10px' }}></i></span>
+                </div>
+              </div>
             </div>
             
             <div className="text-center mt-5">
@@ -970,6 +984,10 @@ export default function Home() {
 
   if (activeModule === 'office') {
     return <OfficeExpense moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} />
+  }
+
+  if (activeModule === 'daily_polish') {
+    return <DailyPolishReport moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} />
   }
 
   return (
