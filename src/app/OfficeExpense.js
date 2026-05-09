@@ -23,6 +23,11 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
   const [expenseErrors, setExpenseErrors] = useState({});
   const [catForm, setCatForm] = useState('');
   const [mergeForm, setMergeForm] = useState({ name: '', selectedFunds: [] });
+  const [isMerging, setIsMerging] = useState(false);
+  const [isSavingFund, setIsSavingFund] = useState(false);
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
   
   const fileInputRef = useRef(null);
 
@@ -56,6 +61,7 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
 
   // Fund Actions
   const handleFundSubmit = async () => {
+    if (isSavingFund) return;
     const errors = {};
     if (!fundForm.source_name) errors.source_name = 'Source / Person Name is required.';
     if (!fundForm.initial_amount) errors.initial_amount = 'Amount is required.';
@@ -64,16 +70,23 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
       setFundErrors(errors);
       return;
     }
+    setIsSavingFund(true);
     setFundErrors({});
     const payload = { source_name: fundForm.source_name, initial_amount: Number(fundForm.initial_amount), date: fundForm.date };
     
     if (fundForm.id) {
       const { error } = await supabase.from('office_funds').update(payload).eq('id', fundForm.id);
-      if (error) return toast('Error updating fund', 'danger');
+      if (error) {
+        setIsSavingFund(false);
+        return toast('Error updating fund', 'danger');
+      }
       toast('Fund updated successfully');
     } else {
       const { error } = await supabase.from('office_funds').insert([payload]);
-      if (error) return toast('Error adding fund', 'danger');
+      if (error) {
+        setIsSavingFund(false);
+        return toast('Error adding fund', 'danger');
+      }
       toast('Fund added successfully');
     }
     setShowFundModal(false);
@@ -82,6 +95,7 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
         const { data } = await supabase.from('office_funds').select('*, office_expenses(*)').eq('id', currentFund.id).single();
         setCurrentFund(data);
     }
+    setIsSavingFund(false);
   };
 
   const requestDeleteFund = (id) => {
@@ -124,6 +138,7 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
 
   // Expense Actions
   const handleExpenseSubmit = async () => {
+    if (isSavingExpense) return;
     const errors = {};
     if (!expenseForm.description) errors.description = 'Description is required.';
     if (!expenseForm.amount) errors.amount = 'Amount is required.';
@@ -132,6 +147,7 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
       setExpenseErrors(errors);
       return;
     }
+    setIsSavingExpense(true);
     setExpenseErrors({});
     
     const amount = Number(expenseForm.amount);
@@ -143,7 +159,10 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
         available += Number(oldExp.amount);
     }
     
-    if (amount > available) return toast('Expense amount exceeds current remaining balance!', 'danger');
+    if (amount > available) {
+      setIsSavingExpense(false);
+      return toast('Expense amount exceeds current remaining balance!', 'danger');
+    }
 
     const payload = { 
         fund_id: currentFund.id, 
@@ -156,11 +175,17 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
 
     if (expenseForm.id) {
       const { error } = await supabase.from('office_expenses').update(payload).eq('id', expenseForm.id);
-      if (error) return toast('Error updating expense', 'danger');
+      if (error) {
+        setIsSavingExpense(false);
+        return toast('Error updating expense', 'danger');
+      }
       toast('Expense updated');
     } else {
       const { error } = await supabase.from('office_expenses').insert([payload]);
-      if (error) return toast('Error adding expense', 'danger');
+      if (error) {
+        setIsSavingExpense(false);
+        return toast('Error adding expense', 'danger');
+      }
       toast('Expense added');
     }
     
@@ -170,6 +195,7 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
     const { data } = await supabase.from('office_funds').select('*, office_expenses(*)').eq('id', currentFund.id).single();
     setCurrentFund(data);
     fetchData();
+    setIsSavingExpense(false);
   };
 
   const requestDeleteExpense = (id) => {
@@ -177,6 +203,8 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
   };
 
   const confirmDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
     if (deleteConfirm.type === 'fund') {
         await supabase.from('office_funds').delete().eq('id', deleteConfirm.id);
         toast('Fund deleted');
@@ -192,11 +220,15 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
         fetchData();
     }
     setDeleteConfirm({ show: false, type: '', id: null });
+    setIsDeleting(false);
   };
 
   // Merge Actions
   const handleMergeSubmit = async () => {
+      if (isMerging) return;
       if(mergeForm.selectedFunds.length < 2) return toast('Select at least 2 funds to merge', 'warning');
+      
+      setIsMerging(true);
       const name = mergeForm.name || 'Merged Fund';
       
       let totalAmount = 0;
@@ -225,7 +257,10 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
           date: new Date().toISOString().split('T')[0]
       }]).select().single();
 
-      if(newFundErr) return toast('Error creating merged fund', 'danger');
+      if(newFundErr) {
+          setIsMerging(false);
+          return toast('Error creating merged fund', 'danger');
+      }
 
       // 2. Add transfer expenses to old funds
       await supabase.from('office_expenses').insert(expensesToInsert);
@@ -238,16 +273,22 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
       toast('Funds merged successfully!');
       setShowMergeModal(false);
       fetchData();
+      setIsMerging(false);
   };
 
   // Category Actions
   const addCategory = async () => {
-      if(!catForm) return;
+      if(!catForm || isAddingCategory) return;
+      setIsAddingCategory(true);
       const { error } = await supabase.from('office_categories').insert([{ name: catForm }]);
-      if(error) return toast('Category exists or error', 'danger');
+      if(error) {
+        setIsAddingCategory(false);
+        return toast('Category exists or error', 'danger');
+      }
       setCatForm('');
       fetchData();
       toast('Category added');
+      setIsAddingCategory(false);
   };
   
   const deleteCategory = async (id) => {
@@ -257,12 +298,22 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
 
   // Dashboard calculations
   let totalInitial = 0, totalSpent = 0, totalBalance = 0;
+  const allExpenses = [];
+  
   funds.forEach(f => {
       const stats = getFundStats(f);
       totalInitial += Number(f.initial_amount);
       totalSpent += stats.spent;
       if (f.status === 'active') totalBalance += stats.balance;
+      
+      if (f.office_expenses) {
+          f.office_expenses.forEach(exp => {
+              allExpenses.push({...exp, fundName: f.source_name});
+          });
+      }
   });
+  
+  allExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div style={{ background: '#fefdfd', minHeight: '100vh', paddingBottom: '40px' }}>
@@ -322,15 +373,19 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
             </div>
 
             <div className="row g-4">
-              {funds.map(fund => {
+              {funds.map((fund, index) => {
                 const stats = getFundStats(fund);
+                const serialNo = funds.length - index;
                 return (
                   <div key={fund.id} className="col-md-4">
                     <div className={`card h-100 border-0 shadow-sm ${fund.status !== 'active' ? 'bg-light opacity-75' : ''}`} style={{ cursor: 'pointer', transition: 'transform 0.2s' }} onClick={() => { setCurrentFund(fund); setView('detail'); }}>
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start mb-3">
                           <div>
-                            <h5 className="fw-bold mb-1">{fund.source_name}</h5>
+                            <div className="d-flex align-items-center gap-2 mb-1">
+                              <span className="badge bg-secondary rounded-circle px-0" style={{ width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem' }}>{serialNo}</span>
+                              <h5 className="fw-bold m-0">{fund.source_name}</h5>
+                            </div>
                             <small className="text-muted">{formatDate(fund.date)}</small>
                           </div>
                           <div>
@@ -351,6 +406,48 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                 )
               })}
               {funds.length === 0 && !loading && <div className="text-center text-muted mt-5">No funds tracked yet. Add one to get started.</div>}
+            </div>
+
+            {/* Expense History Table */}
+            <div className="mt-5 mb-3">
+              <h4 className="fw-bold m-0">Recent Expenses History</h4>
+            </div>
+            <div className="card shadow-sm border-0 mb-4">
+              <div className="card-body">
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle">
+                    <thead className="table-light text-uppercase text-muted" style={{ fontSize: '0.85rem' }}>
+                      <tr>
+                        <th>Sr. No.</th>
+                        <th>Date</th>
+                        <th>Fund Source</th>
+                        <th>Description</th>
+                        <th>Category</th>
+                        <th>Amount</th>
+                        <th>Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allExpenses.map((exp, index, arr) => (
+                        <tr key={exp.id}>
+                          <td className="fw-bold text-muted">{arr.length - index}</td>
+                          <td>{formatDate(exp.date)}</td>
+                          <td className="fw-bold text-primary">{exp.fundName}</td>
+                          <td>{exp.description}</td>
+                          <td><span className={`badge ${exp.category === 'Transfer/Merge' ? 'bg-danger bg-opacity-10 text-danger' : 'bg-light text-dark border'} rounded-pill px-3 py-2`}>{exp.category}</span></td>
+                          <td className="fw-bold text-danger">{formatCurrency(exp.amount)}</td>
+                          <td>
+                            {exp.image ? <img src={exp.image} alt="Receipt" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '8px', cursor: 'zoom-in', border: '1px solid #ddd' }} onClick={() => { setLightboxImg(exp.image); setShowLightbox(true); }} /> : <span className="text-muted">-</span>}
+                          </td>
+                        </tr>
+                      ))}
+                      {allExpenses.length === 0 && (
+                        <tr><td colSpan="7" className="text-center text-muted py-4">No expenses recorded yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </>
         ) : (
@@ -394,11 +491,12 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                         <div className="table-responsive">
                           <table className="table table-hover align-middle">
                             <thead className="table-light text-uppercase text-muted" style={{ fontSize: '0.85rem' }}>
-                              <tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Receipt</th><th>Actions</th></tr>
+                              <tr><th>Sr. No.</th><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Receipt</th><th>Actions</th></tr>
                             </thead>
                             <tbody>
-                              {(currentFund.office_expenses || []).sort((a,b) => new Date(b.date) - new Date(a.date)).map(exp => (
+                              {(currentFund.office_expenses || []).sort((a,b) => new Date(b.date) - new Date(a.date)).map((exp, index, arr) => (
                                 <tr key={exp.id}>
+                                  <td className="fw-bold text-muted">{arr.length - index}</td>
                                   <td>{formatDate(exp.date)}</td>
                                   <td>{exp.description}</td>
                                   <td><span className={`badge ${exp.category === 'Transfer/Merge' ? 'bg-danger bg-opacity-10 text-danger' : 'bg-light text-dark border'} rounded-pill px-3 py-2`}>{exp.category}</span></td>
@@ -416,7 +514,7 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                                   </td>
                                 </tr>
                               ))}
-                              {(!currentFund.office_expenses || currentFund.office_expenses.length === 0) && <tr><td colSpan="6" className="text-center text-muted py-4">No expenses recorded yet.</td></tr>}
+                              {(!currentFund.office_expenses || currentFund.office_expenses.length === 0) && <tr><td colSpan="7" className="text-center text-muted py-4">No expenses recorded yet.</td></tr>}
                             </tbody>
                           </table>
                         </div>
@@ -439,7 +537,9 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                 <div className="mb-3"><label className="form-label text-muted fw-bold">Source / Person Name</label><input type="text" className={`form-control ${fundErrors.source_name ? 'is-invalid' : ''}`} value={fundForm.source_name} onChange={e => { setFundForm({...fundForm, source_name: e.target.value}); setFundErrors({...fundErrors, source_name: null}) }} />{fundErrors.source_name && <div className="invalid-feedback">{fundErrors.source_name}</div>}</div>
                 <div className="mb-3"><label className="form-label text-muted fw-bold">Amount Received (₹)</label><input type="number" className={`form-control ${fundErrors.initial_amount ? 'is-invalid' : ''}`} value={fundForm.initial_amount} onChange={e => { setFundForm({...fundForm, initial_amount: e.target.value}); setFundErrors({...fundErrors, initial_amount: null}) }} />{fundErrors.initial_amount && <div className="invalid-feedback">{fundErrors.initial_amount}</div>}</div>
                 <div className="mb-4"><label className="form-label text-muted fw-bold">Date</label><input type="date" className="form-control" value={fundForm.date} onChange={e => setFundForm({...fundForm, date: e.target.value})} /></div>
-                <button className="btn btn-primary w-100 py-2 fw-bold" onClick={handleFundSubmit}>Save Fund</button>
+                <button className="btn btn-primary w-100 py-2 fw-bold" onClick={handleFundSubmit} disabled={isSavingFund}>
+                  {isSavingFund ? 'Saving...' : 'Save Fund'}
+                </button>
               </div>
             </div>
           </div>
@@ -459,9 +559,26 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                 <div className="mb-4">
                   <label className="form-label text-muted fw-bold">Receipt Image (Optional)</label>
                   <input type="file" className="form-control" accept="image/*" ref={fileInputRef} onChange={handleImageChange} />
-                  {expenseForm.image && <div className="mt-2 position-relative d-inline-block"><img src={expenseForm.image} alt="preview" style={{ height: '80px', borderRadius: '8px' }} /><span className="position-absolute top-0 end-0 badge bg-dark opacity-75">Preview</span></div>}
+                  {expenseForm.image && (
+                    <div className="mt-2 position-relative d-inline-block">
+                      <img src={expenseForm.image} alt="preview" style={{ height: '80px', borderRadius: '8px', border: '1px solid #ddd' }} />
+                      <button 
+                        className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 rounded-circle p-1 d-flex justify-content-center align-items-center" 
+                        style={{ width: '24px', height: '24px' }} 
+                        onClick={() => {
+                          setExpenseForm(prev => ({ ...prev, image: '' }));
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        title="Remove Image"
+                      >
+                        <i className="fas fa-times" style={{ fontSize: '12px' }}></i>
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <button className="btn btn-primary w-100 py-2 fw-bold" onClick={handleExpenseSubmit}>Save Expense</button>
+                <button className="btn btn-primary w-100 py-2 fw-bold" onClick={handleExpenseSubmit} disabled={isSavingExpense}>
+                  {isSavingExpense ? 'Saving...' : 'Save Expense'}
+                </button>
               </div>
             </div>
           </div>
@@ -494,7 +611,9 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                   })}
                 </div>
                 <div className="mb-4"><label className="form-label text-muted fw-bold">New Merged Fund Name</label><input type="text" className="form-control" placeholder="e.g. Combined Remaining" value={mergeForm.name} onChange={e => setMergeForm({...mergeForm, name: e.target.value})} /></div>
-                <button className="btn btn-primary w-100 py-2 fw-bold" onClick={handleMergeSubmit}>Confirm Merge</button>
+                <button className="btn btn-primary w-100 py-2 fw-bold" onClick={handleMergeSubmit} disabled={isMerging}>
+                  {isMerging ? 'Merging...' : 'Confirm Merge'}
+                </button>
               </div>
             </div>
           </div>
@@ -517,7 +636,9 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                 </div>
                 <div className="d-flex gap-2">
                   <input type="text" className="form-control" placeholder="New Category Name" value={catForm} onChange={e => setCatForm(e.target.value)} />
-                  <button className="btn btn-primary px-4 fw-bold" onClick={addCategory}>Add</button>
+                  <button className="btn btn-primary px-4 fw-bold" onClick={addCategory} disabled={isAddingCategory}>
+                    {isAddingCategory ? '...' : 'Add'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -544,7 +665,9 @@ export default function OfficeExpense({ moduleSwitcher, supabase, toast }) {
                 <p className="text-muted mb-4">Are you sure you want to delete this {deleteConfirm.type}? This action cannot be undone.</p>
                 <div className="d-flex gap-2 justify-content-center">
                   <button className="btn btn-light px-4 fw-bold" onClick={() => setDeleteConfirm({ show: false, type: '', id: null })}>Cancel</button>
-                  <button className="btn btn-danger px-4 fw-bold" onClick={confirmDelete}>Delete</button>
+                  <button className="btn btn-danger px-4 fw-bold" onClick={confirmDelete} disabled={isDeleting}>
+                    {isDeleting ? 'Deleting...' : 'Delete'}
+                  </button>
                 </div>
               </div>
             </div>
