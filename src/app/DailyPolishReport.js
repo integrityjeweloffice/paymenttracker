@@ -11,7 +11,10 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   
   // Search state
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchKapan, setSearchKapan] = useState('');
+  const [searchShape, setSearchShape] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   
   // Entry Form States
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
@@ -156,10 +159,13 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
   };
 
   // Filtering Logic
-  const filteredRecords = records.filter(r => 
-    r.kapan.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.shape.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRecords = records.filter(r => {
+    const matchesKapan = r.kapan.toLowerCase().includes(searchKapan.toLowerCase());
+    const matchesShape = r.shape.toLowerCase().includes(searchShape.toLowerCase());
+    const matchesFromDate = fromDate ? r.date >= fromDate : true;
+    const matchesToDate = toDate ? r.date <= toDate : true;
+    return matchesKapan && matchesShape && matchesFromDate && matchesToDate;
+  });
 
   // Group filtered records by date
   const groupedRecords = filteredRecords.reduce((acc, curr) => {
@@ -177,36 +183,89 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
           </button>
           <h2 className="m-0" style={{ background: 'linear-gradient(to right, #6366f1, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>Daily Polish Production</h2>
         </div>
-        <div className="d-flex gap-3 align-items-center">
-            <div className="position-relative d-none d-md-block">
-                <i className="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
-                <input 
-                    type="text" 
-                    className="form-control ps-5 rounded-pill" 
-                    placeholder="Search Kapan or Shape..." 
-                    style={{ width: '300px', background: '#f1f5f9', border: 'none' }}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+        <div className="d-flex gap-3 align-items-center flex-wrap">
+            <div className="d-none d-lg-flex gap-2 align-items-center">
+                <div className="position-relative">
+                    <i className="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                    <input 
+                        type="text" 
+                        className="form-control ps-5 rounded-pill" 
+                        placeholder="Search Kapan..." 
+                        style={{ width: '180px', background: '#f1f5f9', border: 'none' }}
+                        value={searchKapan}
+                        onChange={(e) => setSearchKapan(e.target.value)}
+                    />
+                </div>
+                <div className="position-relative">
+                    <i className="fas fa-gem position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                    <input 
+                        type="text" 
+                        className="form-control ps-5 rounded-pill" 
+                        placeholder="Search Shape..." 
+                        style={{ width: '180px', background: '#f1f5f9', border: 'none' }}
+                        value={searchShape}
+                        onChange={(e) => setSearchShape(e.target.value)}
+                    />
+                </div>
+                <div className="d-flex align-items-center gap-2 ms-2">
+                    <input type="date" className="form-control rounded-pill border-0 px-3" style={{ background: '#f1f5f9', fontSize: '0.85rem' }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
+                    <span className="text-muted small fw-bold">TO</span>
+                    <input type="date" className="form-control rounded-pill border-0 px-3" style={{ background: '#f1f5f9', fontSize: '0.85rem' }} value={toDate} onChange={e => setToDate(e.target.value)} />
+                </div>
+                {(searchKapan || searchShape || fromDate || toDate) && (
+                    <button className="btn btn-light btn-sm rounded-circle" onClick={() => { setSearchKapan(''); setSearchShape(''); setFromDate(''); setToDate(''); }} title="Clear Filters">
+                        <i className="fas fa-times"></i>
+                    </button>
+                )}
             </div>
-            <button className="btn btn-primary rounded-pill px-4 shadow-sm" onClick={() => { setShowEntryModal(true); setEntries([{ kapan: '', carats: '', shape: categories[0]?.name || '' }]); }}>
+            <button className="btn btn-primary rounded-pill px-4 shadow-sm fw-bold" onClick={() => { setShowEntryModal(true); setEntries([{ kapan: '', carats: '', shape: categories[0]?.name || '' }]); }}>
                 <i className="fas fa-plus me-2"></i> New Entry
             </button>
         </div>
       </header>
 
       <div className="container mt-4">
-        {/* Mobile Search */}
-        <div className="d-md-none mb-4">
-             <div className="position-relative">
-                <i className="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
-                <input 
-                    type="text" 
-                    className="form-control ps-5 rounded-pill shadow-sm" 
-                    placeholder="Search Kapan or Shape..." 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+        {/* Mobile Filters */}
+        <div className="d-lg-none mb-4">
+             <div className="row g-2">
+                <div className="col-6">
+                    <div className="position-relative">
+                        <i className="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                        <input 
+                            type="text" 
+                            className="form-control ps-5 rounded-pill shadow-sm" 
+                            placeholder="Kapan..." 
+                            value={searchKapan}
+                            onChange={(e) => setSearchKapan(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="col-6">
+                    <div className="position-relative">
+                        <i className="fas fa-gem position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+                        <input 
+                            type="text" 
+                            className="form-control ps-5 rounded-pill shadow-sm" 
+                            placeholder="Shape..." 
+                            value={searchShape}
+                            onChange={(e) => setSearchShape(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="col-12 mt-2">
+                    <div className="d-flex align-items-center gap-2 bg-white p-2 rounded-pill shadow-sm">
+                        <input type="date" className="form-control border-0 bg-transparent" style={{ fontSize: '0.85rem' }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
+                        <span className="text-muted small fw-bold">TO</span>
+                        <input type="date" className="form-control border-0 bg-transparent" style={{ fontSize: '0.85rem' }} value={toDate} onChange={e => setToDate(e.target.value)} />
+                    </div>
+                </div>
+                {(searchKapan || searchShape || fromDate || toDate) && (
+                    <div className="col-12 text-center mt-2">
+                        <button className="btn btn-link btn-sm text-muted" onClick={() => { setSearchKapan(''); setSearchShape(''); setFromDate(''); setToDate(''); }}>
+                            Clear All Filters
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
 
@@ -445,7 +504,7 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
             font-weight: 800;
             color: #4f46e5;
-            font-size: 1rem;
+            font-size: 1.1rem;
             letter-spacing: 0.5px;
         }
 
@@ -468,24 +527,25 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
         }
         
         .shape-tag {
-            font-size: 0.75rem;
+            font-size: 0.9rem;
             font-weight: 800;
             text-transform: uppercase;
-            color: #6366f1;
-            background: rgba(99, 102, 241, 0.1);
-            padding: 6px 12px;
+            color: #4f46e5;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 8px 16px;
             border-radius: 10px;
             display: inline-block;
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .kapan-text {
-            font-weight: 700;
+            font-weight: 800;
             color: #1e293b;
-            font-size: 1.15rem;
+            font-size: 1.3rem;
         }
         
         .small-time {
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             font-weight: 600;
             opacity: 0.7;
         }
@@ -497,11 +557,11 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
         }
         .carats-val {
             font-weight: 800;
-            font-size: 1.6rem;
+            font-size: 1.8rem;
             color: #059669;
         }
         .carats-unit {
-            font-size: 0.85rem;
+            font-size: 0.95rem;
             font-weight: 700;
             color: #64748b;
         }
