@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
+export default function DailyPolishReport({ moduleSwitcher, supabase, toast, location }) {
   const [records, setRecords] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +27,10 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
   
   const [catForm, setCatForm] = useState('');
 
+  // Confirm Modal State
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmId, setConfirmId] = useState(null);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -36,6 +40,7 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
     const { data: prodData, error: prodErr } = await supabase
       .from('daily_polish_production')
       .select('*')
+      .eq('location', location)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
     
@@ -83,6 +88,7 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
       kapan: e.kapan.trim(),
       carats: parseFloat(e.carats),
       shape: e.shape,
+      location: location
     }));
 
     const { error } = await supabase.from('daily_polish_production').insert(payload);
@@ -174,6 +180,29 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
     return acc;
   }, {});
 
+  // Calculate Kapan-wise stats for Mumbai
+  const kapanStats = React.useMemo(() => {
+    if (location !== 'Mumbai') return {};
+    return filteredRecords.reduce((acc, curr) => {
+      const kapan = curr.kapan.toUpperCase();
+      acc[kapan] = (acc[kapan] || 0) + Number(curr.carats);
+      return acc;
+    }, {});
+  }, [filteredRecords, location]);
+
+  const confirmDelete = (id) => {
+    setConfirmId(id);
+    setShowConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmId) {
+      await deleteRecord(confirmId);
+    }
+    setShowConfirm(false);
+    setConfirmId(null);
+  };
+
   return (
     <div style={{ background: '#fefdfd', minHeight: '100vh', paddingBottom: '60px' }}>
       <header className="d-flex justify-content-between align-items-center p-4 border-bottom bg-white sticky-top shadow-sm" style={{ zIndex: 1000 }}>
@@ -181,7 +210,7 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
           <button className="btn btn-light rounded-circle p-2" onClick={moduleSwitcher} title="Back to Selection">
              <i className="fas fa-arrow-left"></i>
           </button>
-          <h2 className="m-0" style={{ background: 'linear-gradient(to right, #6366f1, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>Daily Polish Production</h2>
+          <h2 className="m-0" style={{ background: 'linear-gradient(to right, #6366f1, #06b6d4)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>Daily Polish - {location}</h2>
         </div>
         <div className="d-flex gap-3 align-items-center flex-wrap">
             <div className="d-none d-lg-flex gap-2 align-items-center">
@@ -281,6 +310,21 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
           </button>
         </div>
 
+        {/* Mumbai Statistics */}
+        {location === 'Mumbai' && Object.keys(kapanStats).length > 0 && (
+          <div className="mb-5 bg-white p-4 rounded-4 shadow-sm border mx-auto" style={{ maxWidth: '900px' }}>
+            <h5 className="fw-bold mb-4 text-muted border-bottom pb-2"><i className="fas fa-chart-pie me-2 text-primary"></i>Kapan-wise Total Carats (Filtered)</h5>
+            <div className="d-flex flex-wrap gap-3">
+              {Object.entries(kapanStats).map(([kapan, total]) => (
+                <div key={kapan} className="kapan-stat-card border rounded-3 p-3 text-center flex-grow-1" style={{ minWidth: '150px', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' }}>
+                  <div className="fw-bold text-dark mb-1">{kapan}</div>
+                  <div className="text-primary fw-bolder fs-4">{total.toFixed(2)} <span className="fs-6 text-muted">cts</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Grouped Vertical Logs */}
         <div className="mx-auto" style={{ maxWidth: '900px' }}>
             {Object.keys(groupedRecords).length > 0 ? (
@@ -323,7 +367,7 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
                                                     <button className="circle-btn edit" onClick={() => openEdit(record)} title="Edit">
                                                         <i className="fas fa-pencil-alt"></i>
                                                     </button>
-                                                    <button className="circle-btn delete" onClick={() => { if(confirm('Delete this record?')) deleteRecord(record.id); }} title="Delete">
+                                                    <button className="circle-btn delete" onClick={() => confirmDelete(record.id)} title="Delete">
                                                         <i className="fas fa-trash-alt"></i>
                                                     </button>
                                                 </div>
@@ -484,6 +528,25 @@ export default function DailyPolishReport({ moduleSwitcher, supabase, toast }) {
                     {isAddingCategory ? '...' : 'ADD SHAPE'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Modal */}
+      {showConfirm && (
+        <div className="modal show d-block" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', zIndex: 1060 }}>
+          <div className="modal-dialog modal-dialog-centered modal-sm">
+            <div className="modal-content rounded-4 border-0 shadow-lg text-center p-4">
+              <div className="mb-3 text-danger">
+                <i className="fas fa-exclamation-circle fa-3x"></i>
+              </div>
+              <h5 className="fw-bold mb-2">Delete Record?</h5>
+              <p className="text-muted small mb-4">Are you sure you want to delete this record? This action cannot be undone.</p>
+              <div className="d-flex gap-2 justify-content-center">
+                <button className="btn btn-light fw-bold px-4 rounded-pill" onClick={() => setShowConfirm(false)}>Cancel</button>
+                <button className="btn btn-danger fw-bold px-4 rounded-pill shadow-sm" onClick={handleConfirmDelete}>Delete</button>
               </div>
             </div>
           </div>
