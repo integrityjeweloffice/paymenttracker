@@ -11,10 +11,18 @@ import DailyPolishReport from './DailyPolishReport'
 export default function Home() {
   // Authentication States
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [userRole, setUserRole] = useState(null)
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [activeModule, setActiveModule] = useState('selection')
+
+  // Mumbai Specific Auth
+  const [isMumbaiAuth, setIsMumbaiAuth] = useState(false)
+  const [showMumbaiLogin, setShowMumbaiLogin] = useState(false)
+  const [mumbaiUsername, setMumbaiUsername] = useState('')
+  const [mumbaiPassword, setMumbaiPassword] = useState('')
+  const [isMumbaiLoggingIn, setIsMumbaiLoggingIn] = useState(false)
 
   // Data States
   const [records, setRecords] = useState([])
@@ -196,6 +204,21 @@ export default function Home() {
     setRecords(recordsWithPayments)
     setLoading(false)
   }
+
+  useEffect(() => {
+    // Check session on mount
+    const savedUser = sessionStorage.getItem('auth_user')
+    if (savedUser) {
+      const user = JSON.parse(savedUser)
+      setIsAuthenticated(true)
+      setUserRole(user.role)
+    }
+
+    const savedMumbai = sessionStorage.getItem('mumbai_auth')
+    if (savedMumbai) {
+      setIsMumbaiAuth(true)
+    }
+  }, [])
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -664,9 +687,50 @@ export default function Home() {
       showToast("Invalid username or password", "danger")
     } else {
       setIsAuthenticated(true)
+      setUserRole(data.role)
+      sessionStorage.setItem('auth_user', JSON.stringify({
+        username: data.username,
+        role: data.role
+      }))
       showToast("Login successful!", "success")
     }
     setIsLoggingIn(false)
+  }
+
+  const handleMumbaiLogin = async (e) => {
+    e.preventDefault()
+    if (!mumbaiUsername.trim() || !mumbaiPassword.trim()) {
+      return showToast("Please enter username and password", "danger")
+    }
+
+    setIsMumbaiLoggingIn(true)
+    const { data, error } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('username', mumbaiUsername.trim())
+      .eq('password', mumbaiPassword.trim())
+      .eq('role', 'super_admin')
+      .single()
+    
+    if (error || !data) {
+      showToast("Unauthorized or Invalid Credentials", "danger")
+    } else {
+      setIsMumbaiAuth(true)
+      setShowMumbaiLogin(false)
+      sessionStorage.setItem('mumbai_auth', 'true')
+      setActiveModule('daily_polish_mumbai')
+      showToast("Mumbai access granted!", "success")
+    }
+    setIsMumbaiLoggingIn(false)
+  }
+
+  const handleLogout = () => {
+    setIsAuthenticated(false)
+    setUserRole(null)
+    setIsMumbaiAuth(false)
+    sessionStorage.removeItem('auth_user')
+    sessionStorage.removeItem('mumbai_auth')
+    showToast("Logged out successfully")
   }
 
   if (!isAuthenticated) {
@@ -936,7 +1000,7 @@ export default function Home() {
               <p>Choose a management module to continue</p>
             </div>
             
-            <div className="d-flex gap-4 justify-content-center">
+            <div className="d-flex gap-4 justify-content-center flex-wrap">
               <div className="module-card labour" onClick={() => setActiveModule('labour')}>
                 <div className="icon-box">
                   <i className="fas fa-user-hard-hat"></i>
@@ -959,20 +1023,84 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="module-card daily" onClick={() => setActiveModule('daily_polish')}>
+              <div className="module-card daily" onClick={() => setActiveModule('daily_polish_surat')}>
                 <div className="icon-box">
                   <i className="fas fa-gem"></i>
                 </div>
-                <div className="module-title">Daily Polish</div>
-                <p className="module-desc">Log production details, kapan-wise carats, and diamond shapes.</p>
+                <div className="module-title">Daily Polish (Surat)</div>
+                <p className="module-desc">Log production details for Surat branch.</p>
                 <div className="mt-4">
                   <span className="btn btn-sm px-4 rounded-pill" style={{ background: 'linear-gradient(90deg, #06b6d4, #0891b2)', color: 'white' }}>Open Module <i className="fas fa-chevron-right ms-2" style={{ fontSize: '10px' }}></i></span>
                 </div>
               </div>
+
+              <div className="module-card daily" onClick={() => {
+                if (userRole === 'super_admin' || isMumbaiAuth) {
+                  setActiveModule('daily_polish_mumbai')
+                } else {
+                  setShowMumbaiLogin(true)
+                }
+              }}>
+                <div className="icon-box" style={{ background: 'rgba(244, 63, 94, 0.1)', color: '#e11d48' }}>
+                  <i className="fas fa-gem"></i>
+                </div>
+                <div className="module-title">Daily Polish (Mumbai)</div>
+                <p className="module-desc">Secure access for Mumbai production logs.</p>
+                <div className="mt-4">
+                  <span className="btn btn-sm px-4 rounded-pill" style={{ background: 'linear-gradient(90deg, #f43f5e, #e11d48)', color: 'white' }}>Open Module <i className="fas fa-chevron-right ms-2" style={{ fontSize: '10px' }}></i></span>
+                </div>
+              </div>
             </div>
+
+            {/* Mumbai Login Modal */}
+            {showMumbaiLogin && (
+              <div className="modal show d-block" style={{ background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(10px)', zIndex: 1060 }}>
+                <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '400px' }}>
+                  <div className="modal-content border-0 shadow-2xl rounded-4">
+                    <div className="modal-header border-0 p-4 pb-0 d-flex justify-content-between align-items-center">
+                      <h4 className="fw-bold m-0" style={{ letterSpacing: '-1px' }}>Mumbai Admin Access</h4>
+                      <button type="button" className="btn-close shadow-none" onClick={() => setShowMumbaiLogin(false)}></button>
+                    </div>
+                    <div className="modal-body p-4">
+                      <p className="text-muted small mb-4">Verification required for Mumbai Daily Polish access. Please log in with a Super Admin account.</p>
+                      <form onSubmit={handleMumbaiLogin}>
+                        <div className="mb-3">
+                          <label className="form-label text-uppercase small fw-bold text-muted">Username</label>
+                          <input 
+                            type="text" 
+                            className="form-control rounded-3 border-light bg-light" 
+                            value={mumbaiUsername}
+                            onChange={(e) => setMumbaiUsername(e.target.value)}
+                            placeholder="Super Admin Username"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="mb-4">
+                          <label className="form-label text-uppercase small fw-bold text-muted">Password</label>
+                          <input 
+                            type="password" 
+                            className="form-control rounded-3 border-light bg-light" 
+                            value={mumbaiPassword}
+                            onChange={(e) => setMumbaiPassword(e.target.value)}
+                            placeholder="••••••••"
+                          />
+                        </div>
+                        <button type="submit" className="btn w-100 py-3 text-white fw-bold shadow-lg" style={{ background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)', borderRadius: '14px' }} disabled={isMumbaiLoggingIn}>
+                          {isMumbaiLoggingIn ? (
+                            <><i className="fas fa-spinner fa-spin me-2"></i> Verifying...</>
+                          ) : (
+                            <><i className="fas fa-shield-alt me-2"></i> Authorize Access</>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="text-center mt-5">
-              <button className="btn btn-link text-muted text-decoration-none" onClick={() => setIsAuthenticated(false)}>
+              <button className="btn btn-link text-muted text-decoration-none" onClick={handleLogout}>
                 <i className="fas fa-sign-out-alt me-2"></i> Logout
               </button>
             </div>
@@ -986,8 +1114,12 @@ export default function Home() {
     return <OfficeExpense moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} />
   }
 
-  if (activeModule === 'daily_polish') {
-    return <DailyPolishReport moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} />
+  if (activeModule === 'daily_polish_surat') {
+    return <DailyPolishReport moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} location="Surat" />
+  }
+
+  if (activeModule === 'daily_polish_mumbai') {
+    return <DailyPolishReport moduleSwitcher={() => setActiveModule('selection')} supabase={supabase} toast={showToast} location="Mumbai" />
   }
 
   return (
